@@ -40,6 +40,15 @@ add_geometry <- function(las, k = 10L, n_cores = 1) {
   # necessary for raster_geometry
   # returns geometric features based on eigenvalues
   eigen <- eigen_decomposition(las, k, n_cores) # k neighbours, n cores
+
+  # set zero eigen vectors / NaN geometric features to small value
+  eps = 0.0000001
+
+  eigen[eigen[, 1] == 0, 1] = eps
+  eigen[eigen[, 2] == 0, 2] = eps
+  eigen[eigen[, 3] == 0, 3] = eps
+  eigen[eigen[, 4] == 0, 4] = eps
+
   las <- las |>
     add_lasattribute(eigen[,3] / (eigen[,1] + eigen[,2] + eigen[, 3]), 'Curvature', 'curvature') |>
     add_lasattribute((eigen[,1] - eigen[,2]) / eigen[,1], 'Linearity', 'linearity') |>
@@ -47,6 +56,14 @@ add_geometry <- function(las, k = 10L, n_cores = 1) {
     add_lasattribute(eigen[,3] / eigen[,1], 'Sphericity', 'sphericity') |>
     add_lasattribute((eigen[,1] - eigen[,3]) / eigen[,1], 'Anisotropy', 'anisotropy') |>
     add_lasattribute(1 - abs(eigen[,4]) ,'Verticality','verticality')
+
+  las@data$Curvature[is.nan(las@data$Curvature)] = eps
+  las@data$Linearity[is.nan(las@data$Linearity)] = eps
+  las@data$Planarity[is.nan(las@data$Planarity)] = eps
+  las@data$Sphericity[is.nan(las@data$Sphericity)] = eps
+  las@data$Anisotropy[is.nan(las@data$Anisotropy)] = eps
+  las@data$Verticality[is.nan(las@data$Verticality)] = eps
+
   return(las)
 }
 
