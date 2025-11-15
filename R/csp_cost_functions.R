@@ -278,29 +278,23 @@ comparative_shortest_path <- function(vox = vox, adjacency_df = adjacency_df, se
     igraph::graph_from_data_frame(directed = FALSE) |>
     igraph::simplify()
 
-  # calculate a distance (weight) graph per seed using Dijkstra
-  doParallel::registerDoParallel(cores = N_cores)
-  dists_list <- foreach::foreach(
-    t = 1:nrow(seeds),
-    .noexport = c('las', 'map', 'vox', 'tree_seeds', 'ground', 'dtm', 'adjacency_df', 'inv'),
-    .errorhandling = c('pass')) %dopar% {
-      return(igraph::distances(vox_graph, as.character(seeds$SeedID[t]), algorithm = 'dijkstra'))
-    }
-  doParallel::stopImplicitCluster()
+  seed_ids <- as.character(seeds$SeedID)
+  node_names <- as.character(igraph::V(vox_graph)$name)
 
-  unreachable <- which(sapply(dists_list,function(x) is.character(x[[1]])))
-  if(length(unreachable) > 0) {
-    warning('Not all base positions could be reached by the graph. Try a lower resolution or a different approach to find tree base positions. Error messages for the unreachable TreeIDs:')
-    warning(paste0(unreachable , paste(":",paste(dists_list[unreachable]), collapse = " "), "\n"), call. = FALSE)
-    seeds <- seeds[-unreachable,]
-    dists_list <- dists_list[-unreachable]
-    }
+  unreachable_seeds <- setdiff(seed_ids, node_names)
 
-  # Combine to matrix
-  dist_matrix <- simplify2array(dists_list)[1,,]
+  reachable_mask <- seed_ids %in% node_names
+  seeds <- seeds[reachable_mask, , drop = FALSE]
+
+  dist_matrix <- igraph::distances(vox_graph, v = as.character(seeds$SeedID), algorithm = "dijkstra")
+
+  if(length(unreachable_seeds) > 0) {
+    warning('Not all base positions could be reached by the graph. Try a lower resolution or a different approach to find tree base positions.')
+  }
+
 
   # get seed with minimum distance
-  min_matrix <- apply(dist_matrix, 1, which.min)
+  min_matrix <- apply(dist_matrix, 2, which.min)
   min_dist_matrix <- suppressWarnings(apply(dist_matrix, 1, min, na.rm = TRUE))
   min_matrix <- data.table::data.table(PointID = as.integer(igraph::V(vox_graph)$name), TreeID = seeds$TreeID[as.integer(min_matrix)], dist = min_dist_matrix)
   min_matrix$TreeID[min_dist_matrix == Inf] <- 0 # set SeedIDs 0 for voxels which any seed can't reach
